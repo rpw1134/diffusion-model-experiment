@@ -5,6 +5,10 @@ def generate_schedule(T=100):
     alpha_bars = torch.cumprod(alphas, dim=0)
     return betas, alphas, alpha_bars
 
+def generate_uniform_times(num_samples=5000, T=100):
+    t = (T * torch.rand(num_samples)).int()
+    return t
+
 
 if __name__ == "__main__":
     arr, alphas, alpha_bars = generate_schedule()
