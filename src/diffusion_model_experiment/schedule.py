@@ -9,6 +9,9 @@ def generate_uniform_times(num_samples=5000, T=100):
     t = (T * torch.rand(num_samples)).int()
     return t
 
+def generate_normal_noise(shape, T=100):
+    t = torch.rand(size=shape)
+
 
 if __name__ == "__main__":
     arr, alphas, alpha_bars = generate_schedule()

@@ -1,13 +1,13 @@
 import torch
 
 from diffusion_model_experiment.dataset import generate_dataset
-from diffusion_model_experiment.schedule import generate_schedule
+from diffusion_model_experiment.schedule import generate_schedule, generate_normal_noise
 from diffusion_model_experiment.visualize import visualize_samples
 
 
 def forward_diffusion(samples, schedule, t, noise=None):
     if noise is None:
-        noise = torch.randn_like(samples)
+        noise = generate_normal_noise(samples.shape)
     alpha_bar_t = schedule[2][t].unsqueeze(1)
     return torch.sqrt(alpha_bar_t) * samples + torch.sqrt(1 - alpha_bar_t) * noise
 
