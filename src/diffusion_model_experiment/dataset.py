@@ -5,7 +5,8 @@ from torch.utils.data import Dataset
 
 def generate_dataset(n_samples=5000, noise=0.05):
     X, _ = make_moons(n_samples=n_samples, noise=noise)
-    return torch.from_numpy(X).float()
+    Y = (X - X.mean(axis=0)) / X.std(axis=0)
+    return torch.from_numpy(Y).float()
 
 
 class DiffusionDataset(Dataset):

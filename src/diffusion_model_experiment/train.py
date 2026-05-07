@@ -8,23 +8,24 @@ from diffusion_model_experiment.model import DiffusionModel
 from diffusion_model_experiment.schedule import generate_uniform_times, generate_schedule
 
 
-def train(epochs = 25):
+def train(epochs=100, T=5000, save_path="diffusion_model.pth"):
     device = torch.device("mps" if torch.mps.is_available() else "cpu")
     model = DiffusionModel().to(device)
     dataset = DiffusionDataset()
-    schedule = tuple(s.to(device) for s in generate_schedule(T=100))
+    schedule = tuple(s.to(device) for s in generate_schedule(T=T))
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     train_split, val_split = random_split(dataset, [4200, 800])
     train_loader = torch.utils.data.DataLoader(train_split, batch_size=64, shuffle=True)
     val_loader = torch.utils.data.DataLoader(val_split, batch_size=64, shuffle=True)
+    best_val_loss = float("inf")
     for epoch in range(epochs):
         train_loss = 0
         val_loss = 0
 
         for batch_idx, data in enumerate(train_loader):
-            clean_samples = data
-            times = generate_uniform_times(num_samples=clean_samples.shape[0]).to(device)
+            clean_samples = data.to(device)
+            times = generate_uniform_times(num_samples=clean_samples.shape[0], T=T).to(device)
             noise = generate_normal_noise(clean_samples.shape).to(device)
             noisy_samples = forward_diffusion(samples=clean_samples, schedule=schedule, t=times, noise=noise).to(device)
 
@@ -38,8 +39,8 @@ def train(epochs = 25):
 
         for batch_idx, data in enumerate(val_loader):
             with torch.no_grad():
-                clean_samples = data
-                times = generate_uniform_times(num_samples=clean_samples.shape[0]).to(device)
+                clean_samples = data.to(device)
+                times = generate_uniform_times(num_samples=clean_samples.shape[0], T=T).to(device)
                 noise = generate_normal_noise(clean_samples.shape).to(device)
                 noisy_samples = forward_diffusion(samples=clean_samples, schedule=schedule, t=times, noise=noise).to(device)
 
@@ -50,13 +51,16 @@ def train(epochs = 25):
         train_loss /= len(train_loader)
         val_loss /= len(val_loader)
 
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            torch.save(model.state_dict(), save_path)
+
         print(f"Epoch {epoch+1}/{epochs} - Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f}")
 
     return model
 
 if __name__ == "__main__":
-    model = train()
-    torch.save(model.state_dict(), "diffusion_model.pth")
+    train(epochs=400, T=1000)
 
 
 
