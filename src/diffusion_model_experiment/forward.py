@@ -1,10 +1,12 @@
 import torch
 
 from diffusion_model_experiment.dataset import generate_dataset
-from diffusion_model_experiment.schedule import generate_schedule, generate_normal_noise
+from diffusion_model_experiment.schedule import generate_schedule
 from diffusion_model_experiment.visualize import visualize_samples
 
-
+def generate_normal_noise(shape, T=100):
+    n = torch.randn(size=shape)
+    return n
 def forward_diffusion(samples, schedule, t, noise=None):
     if noise is None:
         noise = generate_normal_noise(samples.shape)
