@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import torch
-from dataset import generate_dataset
+from src.diffusion_model_experiment.dataset import generate_dataset
 
 
 def visualize_sample(x: torch.Tensor, title: str = "Sample") -> None:
