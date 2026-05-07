@@ -12,7 +12,7 @@ def train(epochs = 25):
     device = torch.device("mps" if torch.mps.is_available() else "cpu")
     model = DiffusionModel().to(device)
     dataset = DiffusionDataset()
-    schedule = generate_schedule(T=100)
+    schedule = tuple(s.to(device) for s in generate_schedule(T=100))
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     train_split, val_split = random_split(dataset, [4200, 800])
@@ -24,11 +24,11 @@ def train(epochs = 25):
 
         for batch_idx, data in enumerate(train_loader):
             clean_samples = data
-            times = generate_uniform_times(num_samples=clean_samples.shape[0])
-            noise = generate_normal_noise(clean_samples.shape)
+            times = generate_uniform_times(num_samples=clean_samples.shape[0]).to(device)
+            noise = generate_normal_noise(clean_samples.shape).to(device)
             noisy_samples = forward_diffusion(samples=clean_samples, schedule=schedule, t=times, noise=noise).to(device)
 
-            predicted_noise = model(torch.concat([noisy_samples, times], dim=1))
+            predicted_noise = model(noisy_samples, times)
             loss = criterion(predicted_noise, noise)
             loss.backward()
             optimizer.step()
@@ -39,11 +39,11 @@ def train(epochs = 25):
         for batch_idx, data in enumerate(val_loader):
             with torch.no_grad():
                 clean_samples = data
-                times = generate_uniform_times(num_samples=clean_samples.shape[0])
-                noise = generate_normal_noise(clean_samples.shape)
+                times = generate_uniform_times(num_samples=clean_samples.shape[0]).to(device)
+                noise = generate_normal_noise(clean_samples.shape).to(device)
                 noisy_samples = forward_diffusion(samples=clean_samples, schedule=schedule, t=times, noise=noise).to(device)
 
-                predicted_noise = model(torch.concat([noisy_samples, times], dim=1))
+                predicted_noise = model(noisy_samples, times)
                 loss = criterion(predicted_noise, noise)
                 val_loss += loss.item()
 
@@ -53,6 +53,11 @@ def train(epochs = 25):
         print(f"Epoch {epoch+1}/{epochs} - Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f}")
 
     return model
+
+if __name__ == "__main__":
+    model = train()
+    torch.save(model.state_dict(), "diffusion_model.pth")
+
 
 
 
