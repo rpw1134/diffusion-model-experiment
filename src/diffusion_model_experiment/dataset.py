@@ -27,7 +27,8 @@ def load_ubyte_labels(filename):
         return labels
 
 def load_mnist():
-    images = torch.from_numpy(load_ubyte_images("data/mnist/train-images.idx3-ubyte")).float() / 255.0
+    # Normalize to [-1, 1] so data is centered at 0, matching the N(0,1) prior at t=T
+    images = torch.from_numpy(load_ubyte_images("data/mnist/train-images.idx3-ubyte")).float() / 255.0 * 2 - 1
     labels = torch.from_numpy(load_ubyte_labels("data/mnist/train-labels.idx1-ubyte")).float()
     return images, labels
 

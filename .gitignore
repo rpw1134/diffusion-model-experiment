@@ -10,3 +10,4 @@ wheels/
 .venv
 
 data
+mnist_diffusion_model.pth

@@ -84,12 +84,12 @@ def visualize_mnist(images: np.ndarray, title: str = "MNIST Samples") -> None:
 def visualize_mnist_sample(x: torch.Tensor, title: str = "MNIST Sample") -> None:
     """
     Display model output as a grid of images.
-    x: (N, 1, H, W) or (1, H, W) tensor, values in roughly [0, 1]
+    x: (N, 1, H, W) or (1, H, W) tensor, values in [-1, 1] (model output space)
     """
     imgs = x.detach().cpu()
     if imgs.ndim == 3:
-        imgs = imgs.unsqueeze(0)     # (1, 1, H, W)
-    imgs = np.clip(imgs.squeeze(1).numpy(), 0, 1)  # (N, H, W)
+        imgs = imgs.unsqueeze(0)
+    imgs = np.clip((imgs.squeeze(1).numpy() + 1) / 2, 0, 1)  # [-1, 1] → [0, 1]
     visualize_mnist(imgs, title=title)
 
 
@@ -105,7 +105,7 @@ def save_mnist_gif(snapshots: list[torch.Tensor], labels: list[str], path: str =
 
     pil_frames = []
     for snapshot, label in zip(snapshots, labels):
-        imgs = np.clip(snapshot.detach().cpu().squeeze(1).numpy()[:n_show], 0, 1)  # (n_show, H, W)
+        imgs = np.clip((snapshot.detach().cpu().squeeze(1).numpy()[:n_show] + 1) / 2, 0, 1)  # [-1, 1] → [0, 1]
         n = len(imgs)
         ncols = min(n, 8)
         nrows = (n + ncols - 1) // ncols
