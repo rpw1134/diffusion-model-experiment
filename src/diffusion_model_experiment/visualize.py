@@ -1,5 +1,6 @@
 import io
 import matplotlib.pyplot as plt
+import numpy as np
 import torch
 from PIL import Image
 from diffusion_model_experiment.dataset import generate_dataset
@@ -63,6 +64,21 @@ def save_gif(snapshots: list[torch.Tensor], labels: list[str], path: str = "diff
         duration=durations,
     )
     print(f"Saved to {path}")
+
+
+def visualize_mnist(images: np.ndarray, title: str = "MNIST Samples") -> None:
+    n = len(images)
+    ncols = min(n, 8)
+    nrows = (n + ncols - 1) // ncols
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * 1.5, nrows * 1.5))
+    axes = np.array(axes).reshape(-1)
+    for i, ax in enumerate(axes):
+        if i < n:
+            ax.imshow(images[i], cmap="gray", vmin=0, vmax=1)
+        ax.axis("off")
+    fig.suptitle(title)
+    plt.tight_layout()
+    plt.show()
 
 
 if __name__ == "__main__":

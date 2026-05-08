@@ -120,3 +120,38 @@ If they need a starting point:
 ## End state
 
 When the project is done, they should be able to explain every line of their code, predict what happens when hyperparameters change, and articulate the connection between the model's output and the score function. At that point, MNIST or score-based models or DDIM are all reasonable next steps.
+
+---
+
+## What we built (2D toy model — completed)
+
+The project lives in `src/diffusion_model_experiment/`. Key files:
+
+- **`dataset.py`** — `generate_dataset(n_samples, noise)` returns `(N, 2)` float32 tensor from `make_moons`. `DiffusionDataset` wraps it for use with a DataLoader.
+- **`schedule.py`** — `generate_schedule(T)` returns `(betas, alphas, alpha_bars)` as flat `(T,)` tensors. `generate_uniform_times(num_samples, T)` samples random timesteps for training.
+- **`forward.py`** — `forward_diffusion(samples, schedule, t, noise)` implements the closed-form forward process (DDPM Eq. 4): `x_t = √ᾱ_t · x_0 + √(1-ᾱ_t) · ε`. `t` is a `(N,)` integer tensor.
+- **`model.py`** — `SinusoidalEmbedding` projects scalar timesteps to a 128-dim vector (sinusoidal dim=32 → linear to 128). `DiffusionModel` takes `(x_t, t)`, concats the time embedding with x_t (input dim=130), and passes through 4 hidden layers of 128 with SiLU activations.
+- **`train.py`** — `train(epochs, T, save_path)` runs the training loop. Saves best checkpoint by val loss. Uses `DiffusionDataset` with 4200/800 train/val split, batch size 64, Adam lr=1e-3.
+- **`inference.py`** — `sample(num_points, T)` runs the full reverse loop. `sample_with_snapshots(num_points, T, num_snapshots)` returns evenly-spaced snapshots for visualization.
+- **`visualize.py`** — `visualize_sample`, `visualize_samples`, `save_gif`. GIF uses PIL for reliable per-frame duration control (pillow writer deduplicates identical frames unreliably).
+
+### Hyperparameters that worked
+- T = 1000 (not 5000 — the beta schedule was designed for T=1000; larger T destroys signal too aggressively)
+- β linear from 1e-4 to 0.02
+- ~300 epochs with batch size 64 over 5000 points (~25k gradient steps)
+- Adam lr=1e-3
+
+### Lessons learned
+- **T=5000 doesn't work** with the standard beta schedule — ᾱ_T ≈ e^(-50), completely destroying signal. T=1000 is the paper's intended pairing for this schedule.
+- **Val loss is a weak proxy for sample quality** — loss plateaued early but sample quality kept improving with more training. The reverse process compounds small per-step improvements.
+- **Device consistency matters** — schedule tensors, noise, and samples all need to be on the same device. Move schedule to device at train time: `tuple(s.to(device) for s in generate_schedule(T=T))`.
+- **Sinusoidal embedding concatenates, doesn't add** — unlike Transformers where positional encoding is added to token embeddings (same dim), here t is a scalar and x_t is 2D, so they must be concatenated after projecting t to a vector.
+- **Pillow GIF writer deduplicates identical frames** — use PIL directly with per-frame `duration` list for reliable hold on last frame.
+
+### What's next for MNIST
+The architecture needs to change significantly:
+- Input is `(C, H, W)` not `(2,)` — need a UNet, not an MLP
+- Time embedding gets **added** to feature maps inside the UNet (same channel dim), not concatenated at input
+- Will need a DataLoader with proper image preprocessing (normalize to [-1, 1])
+- FID score replaces eyeballing for sample quality evaluation
+- Training will be much slower — consider EMA of weights, which we skipped here
