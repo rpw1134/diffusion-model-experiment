@@ -121,8 +121,9 @@ def sample_mnist_with_snapshots(num_images=16, T=1000, num_snapshots=50, path="m
 
 
 if __name__ == "__main__":
-    final, snapshots, labels = sample_mnist_with_snapshots(num_images=16, T=1000, num_snapshots=100)
-    gif_frames = snapshots + [final] * 40
-    gif_labels = labels + ["t=0"] * 40
-    # save_mnist_gif(gif_frames, gif_labels, path="mnist_diffusion.gif", fps=20)
+    final, snapshots, labels = sample_mnist_with_snapshots(num_images=4, T=1000, num_snapshots=200)
+    steady_state = snapshots[0]                                    # cleanest frame (t≈0)
+    gif_frames = snapshots[::-1] + [steady_state] * 40            # noisy → clean, then hold
+    gif_labels = labels[::-1] + ["t=0"] * 40
+    save_mnist_gif(gif_frames, gif_labels, path="mnist_diffusion.gif", fps=20)
     visualize_mnist_sample(final, title="Final samples")
