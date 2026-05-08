@@ -113,7 +113,7 @@ def train_mnist(epochs=100, T=1000, save_path="mnist_diffusion_model.pth"):
 
 
 if __name__ == "__main__":
-    train_mnist(epochs=100, T=1000)
+    train_mnist(epochs=300, T=1000, save_path="mnist_diffusion_model_large.pth")
 
 
 

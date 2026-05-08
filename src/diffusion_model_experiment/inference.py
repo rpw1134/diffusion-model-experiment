@@ -104,7 +104,7 @@ def sample_mnist(num_images=16, T=1000):
     return _reverse_loop(model, initial, T, device)
 
 
-def sample_mnist_with_snapshots(num_images=16, T=1000, num_snapshots=50):
+def sample_mnist_with_snapshots(num_images=16, T=1000, num_snapshots=50, path="mnist_diffusion_model_large.pth"):
     """
     Sample from the trained MNIST UNet, capturing snapshots for a GIF.
 
@@ -115,7 +115,7 @@ def sample_mnist_with_snapshots(num_images=16, T=1000, num_snapshots=50):
         labels:    matching list of strings
     """
     device = torch.device("mps" if torch.mps.is_available() else "cpu")
-    model = _load_mnist_model(device)
+    model = _load_mnist_model(device, path=path)
     initial = torch.randn((num_images, 1, 28, 28), device=device)
     return _reverse_loop_with_snapshots(model, initial, T, device, num_snapshots)
 
