@@ -16,7 +16,7 @@ def load_ubyte_images(filename):
         # Read image data as unsigned bytes (ubyte)
         data = np.fromfile(f, dtype=np.uint8)
         data = data.reshape(num_images, rows, cols)
-        return data.astype(np.float32) / 255.0
+        return data.astype(np.float32)
 
 def load_ubyte_labels(filename):
     with open(filename, 'rb') as f:
@@ -25,6 +25,12 @@ def load_ubyte_labels(filename):
         # Read label data
         labels = np.fromfile(f, dtype=np.uint8)
         return labels
+
+def load_mnist():
+    images = torch.from_numpy(load_ubyte_images("data/mnist/train-images.idx3-ubyte")).float() / 255.0
+    labels = torch.from_numpy(load_ubyte_labels("data/mnist/train-labels.idx1-ubyte")).float()
+    return images, labels
+
 
 class DiffusionDataset(Dataset):
     def __init__(self):
@@ -36,9 +42,20 @@ class DiffusionDataset(Dataset):
     def __getitem__(self, idx):
         return self.points[idx]
 
+class MNISTDataset(Dataset):
+    def __init__(self):
+        self.images, self.labels = load_mnist()
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, idx):
+        return self.images[idx], self.labels[idx]
 
 if __name__ == "__main__":
     from diffusion_model_experiment.visualize import visualize_mnist
-    dataset = load_ubyte_images("data/mnist/train-images.idx3-ubyte")
+    images, labels = load_mnist()
+    dataset = images.numpy()
     print(f"shape: {dataset.shape}, min: {dataset.min():.3f}, max: {dataset.max():.3f}")
+    print(f"Labels 1-16: {labels[:16].numpy()}")
     visualize_mnist(dataset[:16], title="MNIST Training Samples")
