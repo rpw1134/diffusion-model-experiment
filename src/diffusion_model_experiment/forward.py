@@ -11,7 +11,10 @@ def generate_normal_noise(shape):
 def forward_diffusion(samples, schedule, t, noise=None):
     if noise is None:
         noise = generate_normal_noise(samples.shape)
-    alpha_bar_t = schedule[2][t].unsqueeze(1)
+    alpha_bar_t = schedule[2][t]
+    # Reshape to (N, 1, 1, ...) to broadcast over all sample dims (works for both 2D points and images)
+    for _ in range(samples.ndim - 1):
+        alpha_bar_t = alpha_bar_t.unsqueeze(-1)
     return torch.sqrt(alpha_bar_t) * samples + torch.sqrt(1 - alpha_bar_t) * noise
 
 
