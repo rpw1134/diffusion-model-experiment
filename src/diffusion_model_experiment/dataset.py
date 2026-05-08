@@ -31,7 +31,6 @@ def load_mnist():
     labels = torch.from_numpy(load_ubyte_labels("data/mnist/train-labels.idx1-ubyte")).float()
     return images, labels
 
-
 class DiffusionDataset(Dataset):
     def __init__(self):
         self.points = generate_dataset()
