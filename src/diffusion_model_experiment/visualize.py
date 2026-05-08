@@ -81,6 +81,58 @@ def visualize_mnist(images: np.ndarray, title: str = "MNIST Samples") -> None:
     plt.show()
 
 
+def visualize_mnist_sample(x: torch.Tensor, title: str = "MNIST Sample") -> None:
+    """
+    Display model output as a grid of images.
+    x: (N, 1, H, W) or (1, H, W) tensor, values in roughly [0, 1]
+    """
+    imgs = x.detach().cpu()
+    if imgs.ndim == 3:
+        imgs = imgs.unsqueeze(0)     # (1, 1, H, W)
+    imgs = np.clip(imgs.squeeze(1).numpy(), 0, 1)  # (N, H, W)
+    visualize_mnist(imgs, title=title)
+
+
+def save_mnist_gif(snapshots: list[torch.Tensor], labels: list[str], path: str = "mnist_diffusion.gif", fps: int = 20, hold_last_ms: int = 2000, n_show: int = 16) -> None:
+    """
+    Save a GIF of the reverse diffusion process for MNIST.
+    snapshots: list of (N, 1, H, W) tensors in noise → data order
+    n_show:    how many images to display per frame (up to 16)
+    """
+    frame_ms = 1000 // fps
+    durations = [frame_ms] * len(snapshots)
+    durations[-1] = hold_last_ms
+
+    pil_frames = []
+    for snapshot, label in zip(snapshots, labels):
+        imgs = np.clip(snapshot.detach().cpu().squeeze(1).numpy()[:n_show], 0, 1)  # (n_show, H, W)
+        n = len(imgs)
+        ncols = min(n, 8)
+        nrows = (n + ncols - 1) // ncols
+        fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * 1.5, nrows * 1.5))
+        axes = np.array(axes).reshape(-1)
+        for i, ax in enumerate(axes):
+            if i < n:
+                ax.imshow(imgs[i], cmap="gray", vmin=0, vmax=1)
+            ax.axis("off")
+        fig.suptitle(label)
+        plt.tight_layout()
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png")
+        plt.close(fig)
+        buf.seek(0)
+        pil_frames.append(Image.open(buf).copy())
+
+    pil_frames[0].save(
+        path,
+        save_all=True,
+        append_images=pil_frames[1:],
+        loop=0,
+        duration=durations,
+    )
+    print(f"Saved to {path}")
+
+
 if __name__ == "__main__":
     samples = generate_dataset()
     visualize_sample(samples)
