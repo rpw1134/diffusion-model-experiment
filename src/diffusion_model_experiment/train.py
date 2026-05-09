@@ -60,7 +60,15 @@ def train(epochs=100, T=1000, save_path="diffusion_model.pth"):
     return model
 
 
+def _apply_cfg_dropout(labels, null_class, dropout_prob=0.2):
+    mask = torch.rand(labels.shape[0]) < dropout_prob
+    labels = labels.clone()
+    labels[mask] = null_class
+    return labels
+
+
 def train_mnist(epochs=100, T=1000, save_path="mnist_diffusion_model.pth"):
+    from diffusion_model_experiment.model import NULL_CLASS
     device = torch.device("mps" if torch.mps.is_available() else "cpu")
     model = MnistDiffusionUNet().to(device)
     dataset = MNISTDataset()
@@ -75,13 +83,14 @@ def train_mnist(epochs=100, T=1000, save_path="mnist_diffusion_model.pth"):
         train_loss = 0
         val_loss = 0
 
-        for batch_idx, (images, _) in enumerate(train_loader):
-            clean_samples = images.unsqueeze(1).to(device)  # (N, 1, 28, 28)
+        for images, labels in train_loader:
+            clean_samples = images.unsqueeze(1).to(device)                              # (N, 1, 28, 28)
+            labels = _apply_cfg_dropout(labels.long(), NULL_CLASS).to(device)           # 20% replaced with null token
             times = generate_uniform_times(num_samples=clean_samples.shape[0], T=T).to(device)
             noise = generate_normal_noise(clean_samples.shape).to(device)
             noisy_samples = forward_diffusion(samples=clean_samples, schedule=schedule, t=times, noise=noise)
 
-            predicted_noise = model(noisy_samples, times)
+            predicted_noise = model(noisy_samples, times, labels)
             loss = criterion(predicted_noise, noise)
             loss.backward()
             optimizer.step()
@@ -89,14 +98,15 @@ def train_mnist(epochs=100, T=1000, save_path="mnist_diffusion_model.pth"):
 
             train_loss += loss.item()
 
-        for batch_idx, (images, _) in enumerate(val_loader):
+        for images, labels in val_loader:
             with torch.no_grad():
-                clean_samples = images.unsqueeze(1).to(device)  # (N, 1, 28, 28)
+                clean_samples = images.unsqueeze(1).to(device)                          # (N, 1, 28, 28)
+                labels = _apply_cfg_dropout(labels.long(), NULL_CLASS).to(device)
                 times = generate_uniform_times(num_samples=clean_samples.shape[0], T=T).to(device)
                 noise = generate_normal_noise(clean_samples.shape).to(device)
                 noisy_samples = forward_diffusion(samples=clean_samples, schedule=schedule, t=times, noise=noise)
 
-                predicted_noise = model(noisy_samples, times)
+                predicted_noise = model(noisy_samples, times, labels)
                 loss = criterion(predicted_noise, noise)
                 val_loss += loss.item()
 

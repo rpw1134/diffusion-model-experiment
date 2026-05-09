@@ -38,18 +38,30 @@ class DiffusionModel(nn.Module):
         return self.output_head(x)
 
 
+NULL_CLASS = 10  # index reserved for unconditional (CFG dropout) token
+
+
 class MnistDiffusionUNet(nn.Module):
     def __init__(self):
         super().__init__()
-        self.time_emb = SinusoidalEmbedding(dim=32)
+        self.time_emb  = SinusoidalEmbedding(dim=32)
+        self.class_emb = nn.Embedding(11, 32)  # indices 0-9 = digits, 10 = null token
 
-        # Time projections — target channel dim at each block, broadcast over H and W in forward.
+        # Time + class projections — one pair per block, targeting that block's channel dim.
+        # In forward: features += time_proj(t_emb) + class_proj(c_emb), broadcast over H and W.
         self.time_proj_init  = nn.Linear(32,  32)
         self.time_proj_down1 = nn.Linear(32,  64)
         self.time_proj_down2 = nn.Linear(32, 128)
         self.time_proj_btn   = nn.Linear(32, 128)
         self.time_proj_up1   = nn.Linear(32,  64)
         self.time_proj_up2   = nn.Linear(32,  32)
+
+        self.class_proj_init  = nn.Linear(32,  32)
+        self.class_proj_down1 = nn.Linear(32,  64)
+        self.class_proj_down2 = nn.Linear(32, 128)
+        self.class_proj_btn   = nn.Linear(32, 128)
+        self.class_proj_up1   = nn.Linear(32,  64)
+        self.class_proj_up2   = nn.Linear(32,  32)
 
         # Encoder — stride=2, kernel=3, padding=1 halves spatial dims cleanly. 28 → 14 → 7
         # GroupNorm(8, C) normalizes within 8 channel groups, stabilizing training across the network.
@@ -94,22 +106,27 @@ class MnistDiffusionUNet(nn.Module):
 
         self.output_head = nn.Conv2d(32, 1, kernel_size=1)           # (N, 32, 28, 28) → (N,  1, 28, 28)
 
-    def forward(self, x, t):
-        t_emb = self.time_emb(t)  # (N, 32)
+    def forward(self, x, t, c):
+        t_emb = self.time_emb(t)   # (N, 32)
+        c_emb = self.class_emb(c)  # (N, 32)
+
+        def inject(features, t_proj, c_proj):
+            return features + t_proj(t_emb).unsqueeze(-1).unsqueeze(-1) \
+                            + c_proj(c_emb).unsqueeze(-1).unsqueeze(-1)
 
         # Encoder — save skip connections at each resolution
-        skip0 = self.init_conv(x) + self.time_proj_init(t_emb).unsqueeze(-1).unsqueeze(-1)   # (N,  32, 28, 28)
-        skip1 = self.down1(skip0) + self.time_proj_down1(t_emb).unsqueeze(-1).unsqueeze(-1)  # (N,  64, 14, 14)
-        x     = self.down2(skip1) + self.time_proj_down2(t_emb).unsqueeze(-1).unsqueeze(-1)  # (N, 128,  7,  7)
+        skip0 = inject(self.init_conv(x),  self.time_proj_init,  self.class_proj_init)   # (N,  32, 28, 28)
+        skip1 = inject(self.down1(skip0),  self.time_proj_down1, self.class_proj_down1)  # (N,  64, 14, 14)
+        x     = inject(self.down2(skip1),  self.time_proj_down2, self.class_proj_down2)  # (N, 128,  7,  7)
 
         # Bottleneck
-        x = self.bottleneck(x) + self.time_proj_btn(t_emb).unsqueeze(-1).unsqueeze(-1)       # (N, 128,  7,  7)
+        x = inject(self.bottleneck(x), self.time_proj_btn, self.class_proj_btn)          # (N, 128,  7,  7)
 
-        # Decoder — upsample, inject time, cat skip, conv
-        x = self.up1_transpose(x) + self.time_proj_up1(t_emb).unsqueeze(-1).unsqueeze(-1)   # (N,  64, 14, 14)
-        x = self.up1_conv(torch.cat([x, skip1], dim=1))                                      # (N, 128, 14, 14) → (N, 64, 14, 14)
+        # Decoder — upsample, inject time + class, cat skip, conv
+        x = inject(self.up1_transpose(x), self.time_proj_up1, self.class_proj_up1)       # (N,  64, 14, 14)
+        x = self.up1_conv(torch.cat([x, skip1], dim=1))                                  # (N, 128, 14, 14) → (N, 64, 14, 14)
 
-        x = self.up2_transpose(x) + self.time_proj_up2(t_emb).unsqueeze(-1).unsqueeze(-1)   # (N,  32, 28, 28)
-        x = self.up2_conv(torch.cat([x, skip0], dim=1))                                      # (N,  64, 28, 28) → (N, 32, 28, 28)
+        x = inject(self.up2_transpose(x), self.time_proj_up2, self.class_proj_up2)       # (N,  32, 28, 28)
+        x = self.up2_conv(torch.cat([x, skip0], dim=1))                                  # (N,  64, 28, 28) → (N, 32, 28, 28)
 
-        return self.output_head(x)                                                            # (N,   1, 28, 28)
+        return self.output_head(x)                                                        # (N,   1, 28, 28)
