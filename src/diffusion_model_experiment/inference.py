@@ -175,7 +175,8 @@ def sample_mnist_with_snapshots(num_images=16, label=None, T=1000, guidance_scal
 
 
 if __name__ == "__main__":
-    digit = 5
+    import sys
+    digit = int(sys.argv[1]) if len(sys.argv) > 1 else 5
     final, snapshots, labels = sample_mnist_with_snapshots(num_images=16, label=digit, T=1000, guidance_scale=7.5, num_snapshots=100)
     steady_state = snapshots[0]                                    # cleanest frame (t≈0)
     gif_frames = snapshots[::-1] + [steady_state] * 40            # noisy → clean, then hold
