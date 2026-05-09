@@ -141,7 +141,7 @@ def _reverse_loop_cfg_with_snapshots(model, initial, label, T, device, guidance_
     return current, snapshots, snap_labels
 
 
-def sample_mnist(num_images=16, label=None, T=1000, guidance_scale=7.5, path="mnist_diffusion_model.pth"):
+def sample_mnist(num_images=16, label=None, T=1000, guidance_scale=7.5, path="mnist_diffusion_model_conditioned.pth"):
     """
     Sample from the trained MNIST UNet.
     label: int 0-9 for conditioned sampling, or None for unconditional (null token).
@@ -158,7 +158,7 @@ def sample_mnist(num_images=16, label=None, T=1000, guidance_scale=7.5, path="mn
     return _reverse_loop_cfg(model, initial, label, T, device, guidance_scale)
 
 
-def sample_mnist_with_snapshots(num_images=16, label=None, T=1000, guidance_scale=7.5, num_snapshots=50, path="mnist_diffusion_model.pth"):
+def sample_mnist_with_snapshots(num_images=16, label=None, T=1000, guidance_scale=7.5, num_snapshots=50, path="mnist_diffusion_model_conditioned.pth"):
     """
     Sample with snapshots for GIF generation.
     label: int 0-9 for conditioned, or None for unconditional.
@@ -176,10 +176,11 @@ def sample_mnist_with_snapshots(num_images=16, label=None, T=1000, guidance_scal
 
 if __name__ == "__main__":
     import sys
-    digit = int(sys.argv[1]) if len(sys.argv) > 1 else 5
-    final, snapshots, labels = sample_mnist_with_snapshots(num_images=16, label=digit, T=1000, guidance_scale=7.5, num_snapshots=100)
+    digit = int(sys.argv[1]) if len(sys.argv) > 1 else None
+    final, snapshots, labels = sample_mnist_with_snapshots(num_images=4, label=digit, T=1000, guidance_scale=7.5, num_snapshots=100)
     steady_state = snapshots[0]                                    # cleanest frame (t≈0)
     gif_frames = snapshots[::-1] + [steady_state] * 40            # noisy → clean, then hold
     gif_labels = labels[::-1] + ["t=0"] * 40
-    save_mnist_gif(gif_frames, gif_labels, path=f"mnist_{digit}.gif", fps=20)
-    visualize_mnist_sample(final, title=f"Digit {digit} samples")
+    label_str = str(digit) if digit is not None else "unconditioned"
+    save_mnist_gif(gif_frames, gif_labels, path=f"mnist_{label_str}.gif", fps=20)
+    visualize_mnist_sample(final, title=f"Digit {label_str} samples")
