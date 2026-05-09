@@ -13,7 +13,7 @@ def _load_model(device, path="diffusion_model.pth"):
     return model
 
 
-def _load_mnist_model(device, path="mnist_diffusion_model.pth"):
+def _load_mnist_model(device, path="mnist_diffusion_model_conditioned.pth"):
     model = MnistDiffusionUNet().to(device)
     model.load_state_dict(torch.load(path, map_location=device))
     model.eval()
