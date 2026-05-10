@@ -1,9 +1,8 @@
 import torch
 
-from diffusion_model_experiment.dataset import generate_dataset
 from diffusion_model_experiment.model import DiffusionModel, MnistDiffusionUNet, NULL_CLASS
 from diffusion_model_experiment.schedule import generate_schedule
-from diffusion_model_experiment.visualize import visualize_sample, visualize_samples, save_gif, save_mnist_gif, visualize_mnist_sample
+from diffusion_model_experiment.visualize import save_gif, save_mnist_gif, visualize_mnist_sample
 
 
 def _load_model(device, path="diffusion_model.pth"):
@@ -21,19 +20,7 @@ def _load_mnist_model(device, path="mnist_diffusion_model_conditioned.pth"):
 
 
 def _reverse_loop(model, initial, T, device):
-    """
-    Runs the DDPM reverse process from `initial` down to t=0.
-    Works for any sample shape — betas/alphas are scalars and broadcast.
-
-    Args:
-        model:   noise-prediction model, callable as model(x_t, t_tensor)
-        initial: starting noise tensor, shape (N, ...) already on device
-        T:       number of diffusion timesteps
-        device:  torch device
-
-    Returns:
-        final sample tensor, same shape as `initial`
-    """
+    """DDPM reverse process (Algorithm 2). Runs from t=T-1 down to t=0."""
     current = initial
     betas, alphas, cumulative_alphas = [s.to(device) for s in generate_schedule(T=T)]
     with torch.no_grad():
@@ -46,14 +33,7 @@ def _reverse_loop(model, initial, T, device):
 
 
 def _reverse_loop_with_snapshots(model, initial, T, device, num_snapshots):
-    """
-    Same as _reverse_loop but captures evenly-spaced snapshots for visualization.
-
-    Returns:
-        (final, snapshots, labels)
-        snapshots: list of tensors ordered t=T → t=0 (noise → data)
-        labels:    matching list of strings like "t=999"
-    """
+    """Like _reverse_loop, but also returns evenly-spaced snapshots ordered noise → data."""
     current = initial
     betas, alphas, cumulative_alphas = [s.to(device) for s in generate_schedule(T=T)]
     checkpoints = set(range(0, T, max(1, T // num_snapshots)))
@@ -76,6 +56,7 @@ def _reverse_loop_with_snapshots(model, initial, T, device, num_snapshots):
 # --- 2D model ---
 
 def sample(num_points=1000, T=1000):
+    """Run the reverse process and return (num_points, 2) samples."""
     device = torch.device("mps" if torch.mps.is_available() else "cpu")
     model = _load_model(device)
     initial = torch.randn((num_points, 2), device=device)
@@ -83,6 +64,7 @@ def sample(num_points=1000, T=1000):
 
 
 def sample_with_snapshots(num_points=1000, T=1000, num_snapshots=5):
+    """Like sample(), but also returns (final, snapshots, labels) for GIF generation."""
     device = torch.device("mps" if torch.mps.is_available() else "cpu")
     model = _load_model(device)
     initial = torch.randn((num_points, 2), device=device)
@@ -93,12 +75,12 @@ def sample_with_snapshots(num_points=1000, T=1000, num_snapshots=5):
 
 def _reverse_loop_cfg(model, initial, label, T, device, guidance_scale):
     """
-    CFG reverse loop. Runs the model twice per step — once conditioned on `label`,
-    once on the null token — then interpolates:
+    CFG reverse loop. Runs the model twice per step — conditioned on `label` and
+    on the null token — then interpolates:
         ε̂ = ε_uncond + guidance_scale * (ε_cond - ε_uncond)
 
-    guidance_scale=1.0 is pure conditioned. Higher values push more strongly
-    toward the class at the cost of diversity.
+    guidance_scale=1.0 is equivalent to pure conditioned. Higher values push more
+    strongly toward the class at the cost of sample diversity.
     """
     current = initial
     N = current.shape[0]
@@ -107,7 +89,7 @@ def _reverse_loop_cfg(model, initial, label, T, device, guidance_scale):
     c_uncond = torch.full((N,), NULL_CLASS, device=device, dtype=torch.long)
     with torch.no_grad():
         for t in range(T - 1, -1, -1):
-            t_tensor  = torch.full((N,), t, device=device)
+            t_tensor   = torch.full((N,), t, device=device)
             eps_cond   = model(current, t_tensor, c_cond)
             eps_uncond = model(current, t_tensor, c_uncond)
             eps = eps_uncond + guidance_scale * (eps_cond - eps_uncond)
@@ -117,6 +99,7 @@ def _reverse_loop_cfg(model, initial, label, T, device, guidance_scale):
 
 
 def _reverse_loop_cfg_with_snapshots(model, initial, label, T, device, guidance_scale, num_snapshots):
+    """Like _reverse_loop_cfg, but also returns evenly-spaced snapshots ordered noise → data."""
     current = initial
     N = current.shape[0]
     betas, alphas, cumulative_alphas = [s.to(device) for s in generate_schedule(T=T)]
@@ -144,11 +127,10 @@ def _reverse_loop_cfg_with_snapshots(model, initial, label, T, device, guidance_
 def sample_mnist(num_images=16, label=None, T=1000, guidance_scale=7.5, path="mnist_diffusion_model_conditioned.pth"):
     """
     Sample from the trained MNIST UNet.
-    label: int 0-9 for conditioned sampling, or None for unconditional (null token).
-    guidance_scale: how strongly to push toward the class (ignored when label=None).
 
-    Returns:
-        tensor of shape (num_images, 1, 28, 28)
+    label: int 0-9 for class-conditioned sampling, or None for unconditional.
+    guidance_scale: CFG strength (ignored when label is None).
+    Returns a (num_images, 1, 28, 28) tensor.
     """
     device = torch.device("mps" if torch.mps.is_available() else "cpu")
     model = _load_mnist_model(device, path=path)
@@ -160,11 +142,10 @@ def sample_mnist(num_images=16, label=None, T=1000, guidance_scale=7.5, path="mn
 
 def sample_mnist_with_snapshots(num_images=16, label=None, T=1000, guidance_scale=7.5, num_snapshots=50, path="mnist_diffusion_model_conditioned.pth"):
     """
-    Sample with snapshots for GIF generation.
-    label: int 0-9 for conditioned, or None for unconditional.
+    Like sample_mnist(), but also returns (final, snapshots, labels) for GIF generation.
 
-    Returns:
-        (final, snapshots, labels) — snapshots in noise → data order
+    label: int 0-9 for class-conditioned, or None for unconditional.
+    Returns snapshots ordered noise → data.
     """
     device = torch.device("mps" if torch.mps.is_available() else "cpu")
     model = _load_mnist_model(device, path=path)
@@ -178,8 +159,8 @@ if __name__ == "__main__":
     import sys
     digit = int(sys.argv[1]) if len(sys.argv) > 1 else None
     final, snapshots, labels = sample_mnist_with_snapshots(num_images=4, label=digit, T=1000, guidance_scale=7.5, num_snapshots=100)
-    steady_state = snapshots[0]                                    # cleanest frame (t≈0)
-    gif_frames = snapshots[::-1] + [steady_state] * 40            # noisy → clean, then hold
+    steady_state = snapshots[0]                          # cleanest frame (t≈0)
+    gif_frames = snapshots[::-1] + [steady_state] * 40  # noisy → clean, then hold
     gif_labels = labels[::-1] + ["t=0"] * 40
     label_str = str(digit) if digit is not None else "unconditioned"
     save_mnist_gif(gif_frames, gif_labels, path=f"mnist_{label_str}.gif", fps=20)

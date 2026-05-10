@@ -1,36 +1,38 @@
-from sklearn.datasets import make_moons
-import torch
-from torch.utils.data import Dataset
 import struct
+
 import numpy as np
+import torch
+from sklearn.datasets import make_moons
+from torch.utils.data import Dataset
+
 
 def generate_dataset(n_samples=5000, noise=0.05):
+    """Return a (N, 2) float32 tensor of standardized two-moons points."""
     X, _ = make_moons(n_samples=n_samples, noise=noise)
     Y = (X - X.mean(axis=0)) / X.std(axis=0)
     return torch.from_numpy(Y).float()
 
+
 def load_ubyte_images(filename):
-    with open(filename, 'rb') as f:
-        # Read header: magic number, number of images, rows, and columns
+    with open(filename, "rb") as f:
         magic, num_images, rows, cols = struct.unpack(">IIII", f.read(16))
-        # Read image data as unsigned bytes (ubyte)
         data = np.fromfile(f, dtype=np.uint8)
         data = data.reshape(num_images, rows, cols)
         return data.astype(np.float32)
 
+
 def load_ubyte_labels(filename):
-    with open(filename, 'rb') as f:
-        # Read header: magic number and number of items
+    with open(filename, "rb") as f:
         magic, num_items = struct.unpack(">II", f.read(8))
-        # Read label data
-        labels = np.fromfile(f, dtype=np.uint8)
-        return labels
+        return np.fromfile(f, dtype=np.uint8)
+
 
 def load_mnist():
-    # Normalize to [-1, 1] so data is centered at 0, matching the N(0,1) prior at t=T
+    """Return (images, labels) normalized to [-1, 1] to match the N(0,1) prior at t=T."""
     images = torch.from_numpy(load_ubyte_images("data/mnist/train-images.idx3-ubyte")).float() / 255.0 * 2 - 1
     labels = torch.from_numpy(load_ubyte_labels("data/mnist/train-labels.idx1-ubyte")).float()
     return images, labels
+
 
 class DiffusionDataset(Dataset):
     def __init__(self):
@@ -42,6 +44,7 @@ class DiffusionDataset(Dataset):
     def __getitem__(self, idx):
         return self.points[idx]
 
+
 class MNISTDataset(Dataset):
     def __init__(self):
         self.images, self.labels = load_mnist()
@@ -51,6 +54,7 @@ class MNISTDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.images[idx], self.labels[idx]
+
 
 if __name__ == "__main__":
     from diffusion_model_experiment.visualize import visualize_mnist
